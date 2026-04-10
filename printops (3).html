@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrintOps — نظام إدارة الطباعة</title>
+<style>
+:root{
+  --bg:#f0f4fb;--white:#fff;--s1:#f8fafc;--s2:#eef2f9;
+  --border:#e2e8f0;--border2:#c7d4e8;
+  --text:#1a2540;--muted:#5a6a8a;--muted2:#94a3b8;
+  --blue:#2563eb;--blue-l:#eff6ff;--blue-b:#bfdbfe;
+  --green:#059669;--green-l:#ecfdf5;--green-b:#a7f3d0;
+  --red:#dc2626;--red-l:#fef2f2;--red-b:#fecaca;
+  --orange:#d97706;--orange-l:#fffbeb;--orange-b:#fde68a;
+  --r:10px;--r2:7px;
+  --sh:0 1px 4px rgba(0,0,0,.09);--sh2:0 6px 24px rgba(0,0,0,.13);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Tahoma,'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);font-size:13px;direction:rtl}
+
+/* ── LOADER ── */
+#loader{position:fixed;inset:0;background:rgba(255,255,255,.95);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+.spin{width:40px;height:40px;border:4px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+#err-box{display:none;background:var(--red-l);border:1px solid var(--red-b);border-radius:var(--r);padding:16px 20px;color:var(--red);font-size:13px;font-weight:700;text-align:center;max-width:400px}
+
+/* ── NAV ── */
+.nav{position:sticky;top:0;z-index:100;background:var(--white);border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 14px;height:52px;gap:2px;overflow-x:auto;box-shadow:var(--sh)}
+.nav::-webkit-scrollbar{display:none}
+.brand{font-size:15px;font-weight:900;color:var(--blue);margin-left:auto;white-space:nowrap;letter-spacing:-.3px}
+.tab{background:none;border:none;color:var(--muted);font-family:inherit;font-size:12px;font-weight:700;padding:6px 11px;border-radius:var(--r2);cursor:pointer;transition:all .17s;white-space:nowrap}
+.tab:hover{background:var(--s1);color:var(--text)}
+.tab.on{background:var(--blue-l);color:var(--blue)}
+
+/* ── PAGE ── */
+.page{display:none;padding:14px;max-width:1200px;margin:0 auto}
+.page.on{display:block}
+
+/* ── CARD ── */
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);margin-bottom:12px;overflow:hidden}
+.ch{padding:11px 15px;background:var(--s1);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.ch.nc{cursor:default}
+.ch h3{font-size:13px;font-weight:800;display:flex;align-items:center;gap:6px}
+.ch .arr{color:var(--muted2);font-size:11px;transition:transform .25s}
+.ch.open .arr{transform:rotate(180deg)}
+.cb{padding:14px 15px;display:none}
+.cb.on{display:block}
+
+/* ── KPI ── */
+.krow{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px}
+.kpi{background:var(--white);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;box-shadow:var(--sh);position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;right:0;width:4px;height:100%;background:var(--kc,var(--blue));border-radius:0 var(--r) var(--r) 0}
+.kpi-ico{font-size:18px;margin-bottom:4px}
+.kpi-v{font-size:15px;font-weight:800;color:var(--kc,var(--blue));direction:ltr;display:block}
+.kpi-l{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ── NET CARD ── */
+.net{background:linear-gradient(135deg,#1d4ed8,#2563eb 60%,#3b82f6);color:#fff;border-radius:var(--r);padding:18px 20px;margin-bottom:12px;box-shadow:0 4px 20px rgba(37,99,235,.35)}
+.net-v{font-size:30px;font-weight:900;direction:ltr;margin:6px 0 4px}
+.net-s{font-size:11px;opacity:.7}
+.net-row{display:flex;gap:20px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.2)}
+.ni{text-align:center}.ni-v{font-size:14px;font-weight:800;direction:ltr}.ni-l{font-size:10px;opacity:.7;margin-top:1px}
+
+/* ── MINI KPI ── */
+.mkpi{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:5px}
+.mk-n{font-size:12px;font-weight:700}.mk-v{font-size:14px;font-weight:800;direction:ltr}
+
+/* ── FORM ── */
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.fg .f3{grid-column:1/-1}
+@media(max-width:520px){.fg{grid-template-columns:1fr}.fg .f3{grid-column:1}}
+.fl{display:flex;flex-direction:column;gap:3px}
+.sec-lbl{font-size:11px;font-weight:800;color:var(--blue);padding:6px 0 2px;grid-column:1/-1;border-bottom:1px solid var(--blue-b);margin-bottom:2px}
+label{font-size:11px;font-weight:700;color:var(--muted)}
+input,select,textarea{width:100%;background:var(--s1);border:1px solid var(--border2);border-radius:var(--r2);color:var(--text);font-family:inherit;font-size:13px;padding:8px 10px;outline:none;transition:border-color .2s,box-shadow .2s}
+input:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+input[readonly]{background:#eef2f9;color:var(--muted);cursor:not-allowed}
+
+/* ── CALC BOX ── */
+.calc-box{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 12px;background:var(--blue-l);border:1px solid var(--blue-b);border-radius:var(--r2);margin-top:10px}
+.ci{text-align:center}.ci-l{font-size:10px;color:var(--muted);font-weight:700;margin-bottom:2px}.ci-v{font-size:16px;font-weight:900;direction:ltr}
+
+/* ── BUTTONS ── */
+.btn-p{width:100%;margin-top:10px;background:var(--blue);color:#fff;border:none;border-radius:var(--r2);font-family:inherit;font-size:14px;font-weight:700;padding:11px;cursor:pointer;transition:all .18s}
+.btn-p:hover{background:#1d4ed8;transform:translateY(-1px)}
+.btn-cancel{margin-top:6px;background:var(--s1);color:var(--muted);border:1px solid var(--border);border-radius:var(--r2);font-family:inherit;font-size:12px;font-weight:700;padding:8px 16px;cursor:pointer;display:none;width:100%}
+.btn-sm{border:1px solid;border-radius:5px;padding:3px 9px;font-family:inherit;font-size:10px;font-weight:700;cursor:pointer;transition:all .17s;background:transparent}
+.be{border-color:var(--blue);color:var(--blue)}.be:hover{background:var(--blue);color:#fff}
+.bd{border-color:var(--red);color:var(--red)}.bd:hover{background:var(--red);color:#fff}
+.bg{border-color:var(--green);color:var(--green)}.bg:hover{background:var(--green);color:#fff}
+
+/* ── TABLE ── */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:580px}
+thead th{background:var(--s1);padding:8px 7px;font-size:11px;font-weight:800;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap;text-align:right}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:hover{background:var(--s1)}
+tbody td{padding:7px 8px;font-size:12px;vertical-align:middle}
+.empty-td{text-align:center;color:var(--muted2);padding:22px!important;font-size:12px}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800;white-space:nowrap}
+.b-earn{background:var(--green-l);color:var(--green);border:1px solid var(--green-b)}
+.b-hold{background:var(--orange-l);color:var(--orange);border:1px solid var(--orange-b)}
+.b-pend{background:var(--s2);color:var(--muted);border:1px solid var(--border)}
+
+/* ── FILTERS ── */
+.frow{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+.fb{background:var(--s1);border:1px solid var(--border2);color:var(--muted);border-radius:20px;padding:4px 12px;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:all .17s}
+.fb.on,.fb:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+.srch{padding:5px 10px!important;font-size:12px!important;width:130px!important}
+
+/* ── SHIPPERS ── */
+.sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-bottom:12px}
+.sc{background:var(--white);border:1px solid var(--border);border-radius:var(--r);padding:14px;box-shadow:var(--sh)}
+.sc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.sc-name{font-size:14px;font-weight:800}
+.sc-loc{font-size:11px;color:var(--muted);margin-top:1px}
+.pill{font-size:10px;font-weight:800;padding:3px 9px;border-radius:20px}
+.pill-cod{background:var(--green-l);color:var(--green)}
+.pill-sup{background:var(--orange-l);color:var(--orange)}
+.sc-row{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px}
+.sc-row b{direction:ltr;font-weight:700;color:var(--text)}
+.sc-diff{display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+
+/* ── SETTINGS ── */
+.sgrp{margin-bottom:14px}
+.sgrp h4{font-size:12px;font-weight:800;color:var(--blue);margin-bottom:7px;padding-bottom:5px;border-bottom:2px solid var(--blue-b)}
+.sitem{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:4px;font-size:12px}
+.sadd{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.sadd input,.sadd select{flex:1;min-width:90px;padding:7px 9px}
+.sadd button{background:var(--green);color:#fff;border:none;border-radius:var(--r2);padding:8px 14px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.set-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:600px){.set-grid{grid-template-columns:1fr}}
+
+/* ── MODAL ── */
+.ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center;padding:14px}
+.ov.on{display:flex}
+.modal{background:var(--white);border-radius:var(--r);width:100%;max-width:700px;max-height:90vh;overflow-y:auto;box-shadow:var(--sh2)}
+.mh{padding:13px 16px;background:var(--s1);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1}
+.mh h3{font-size:14px;font-weight:800}
+.mc{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(70px);color:#fff;padding:10px 24px;border-radius:30px;font-size:13px;font-weight:800;z-index:9999;transition:transform .3s;white-space:nowrap;box-shadow:var(--sh2);pointer-events:none}
+.toast.on{transform:translateX(-50%) translateY(0)}
+</style>
+<!-- Firebase SDK — blocking load guarantees availability before any script runs -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<!-- LOADER -->
+<div id="loader">
+  <div class="spin"></div>
+  <span style="color:var(--muted);font-size:13px;font-weight:700">جاري الاتصال بـ Firebase...</span>
+  <div id="err-box"></div>
+</div>
+
+<!-- NAV -->
+<nav class="nav">
+  <button class="tab" onclick="goTab('dashboard')">📊 لوحة التحكم</button>
+  <button class="tab" onclick="goTab('orders')">📦 الأوردرات</button>
+  <button class="tab" onclick="goTab('expenses')">💸 المصروفات</button>
+  <button class="tab" onclick="goTab('shippers')">🚚 الشحن</button>
+  <button class="tab" onclick="goTab('settings')">⚙️ الإعدادات</button>
+  <div class="brand">🖨️ PrintOps</div>
+</nav>
+
+<!-- ══════ DASHBOARD ══════ -->
+<div class="page" id="pg-dashboard">
+  <div class="net">
+    <div style="font-size:12px;opacity:.8">💰 صافي الفلوس المتاحة</div>
+    <div class="net-v" id="d-net">— ج.م</div>
+    <div class="net-s">(المحافظ + مع المندوبين) − المصروفات</div>
+    <div class="net-row">
+      <div class="ni"><div class="ni-v" id="d-wallets">0</div><div class="ni-l">المحافظ</div></div>
+      <div class="ni"><div class="ni-v" id="d-shippers">0</div><div class="ni-l">مع المندوبين</div></div>
+      <div class="ni"><div class="ni-v" id="d-exp">0</div><div class="ni-l">المصروفات</div></div>
+      <div class="ni"><div class="ni-v" id="d-coll">0</div><div class="ni-l">المحصل</div></div>
+    </div>
+  </div>
+  <div class="krow">
+    <div class="kpi" style="--kc:var(--blue)"><div class="kpi-ico">💰</div><span class="kpi-v" id="d-sales">0</span><div class="kpi-l">إجمالي المبيعات</div></div>
+    <div class="kpi" style="--kc:var(--red)"><div class="kpi-ico">📦</div><span class="kpi-v" id="d-cost">0</span><div class="kpi-l">إجمالي التكلفة</div></div>
+    <div class="kpi" style="--kc:var(--green)"><div class="kpi-ico">📈</div><span class="kpi-v" id="d-profit">0</span><div class="kpi-l">إجمالي الربح</div></div>
+    <div class="kpi" style="--kc:var(--orange)"><div class="kpi-ico">🔒</div><span class="kpi-v" id="d-hold">0</span><div class="kpi-l">Hold (قبل التسليم)</div></div>
+    <div class="kpi" style="--kc:var(--green)"><div class="kpi-ico">✅</div><span class="kpi-v" id="d-earned">0</span><div class="kpi-l">Earned (بعد التسليم)</div></div>
+  </div>
+  <div class="card">
+    <div class="ch nc"><h3>💳 رصيد المحافظ</h3></div>
+    <div class="cb on" id="d-wallets-detail"></div>
+  </div>
+  <div class="card">
+    <div class="ch nc"><h3>⏳ أوردرات بها متبقي</h3></div>
+    <div class="cb on">
+      <div class="tw"><table>
+        <thead><tr><th>العميل</th><th>المنتج</th><th>المتبقي</th><th>الحالة</th><th>جهة الشحن</th></tr></thead>
+        <tbody id="d-pend-tb"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ ORDERS ══════ -->
+<div class="page" id="pg-orders">
+  <div class="card">
+    <div class="ch" id="ofh" onclick="togSec('ofb','ofh')">
+      <h3 id="oform-title">➕ أوردر جديد</h3>
+      <span class="arr">▼</span>
+    </div>
+    <div class="cb" id="ofb">
+      <div class="fg">
+        <div class="sec-lbl">👤 بيانات العميل</div>
+        <div class="fl"><label>اسم العميل *</label><input type="text" id="o-cn" placeholder="الاسم الكامل"></div>
+        <div class="fl"><label>رقم الهاتف</label><input type="tel" id="o-ph" placeholder="01xxxxxxxxx"></div>
+        <div class="fl"><label>المحافظة *</label><select id="o-gov" onchange="onGovChange()"><option value="">اختر...</option></select></div>
+        <div class="fl"><label>المدينة</label><input type="text" id="o-city" placeholder="المدينة / المنطقة"></div>
+
+        <div class="sec-lbl">📦 تفاصيل الطلب</div>
+        <div class="fl"><label>المنتج *</label><select id="o-prod" onchange="onProdChange()"><option value="">اختر...</option></select></div>
+        <div class="fl"><label>الكمية</label><input type="number" id="o-qty" placeholder="1" min="1" oninput="calcNow()"></div>
+        <div class="fl"><label>سعر البيع / وحدة (ج.م)</label><input type="number" id="o-price" placeholder="0" min="0" oninput="calcNow()"></div>
+        <div class="fl"><label>تكلفة الإنتاج / وحدة (ج.م)</label><input type="number" id="o-cost" placeholder="0" min="0" oninput="calcNow()"></div>
+
+        <div class="sec-lbl">🚚 الشحن</div>
+        <div class="fl"><label>جهة الشحن</label><select id="o-ship"><option value="">اختر...</option></select></div>
+        <div class="fl"><label>تكلفة الشحن (ج.م)</label><input type="number" id="o-shipc" placeholder="0" min="0" oninput="calcNow()"></div>
+        <div class="fl f3">
+          <label>الشحن يدفعه</label>
+          <select id="o-shippay" onchange="calcNow()">
+            <option value="العميل">العميل (افتراضي)</option>
+            <option value="الشركة">الشركة ← يُسجَّل مصروف تلقائياً</option>
+          </select>
+        </div>
+
+        <div class="sec-lbl">💰 الدفع</div>
+        <div class="fl"><label>المبلغ المحصل (ج.م)</label><input type="number" id="o-paid" placeholder="0" min="0" oninput="calcNow()"></div>
+        <div class="fl"><label>المحفظة</label><select id="o-wal"><option value="">اختر...</option></select></div>
+
+        <div class="sec-lbl">📌 الحالة والفريق</div>
+        <div class="fl"><label>حالة الأوردر</label><select id="o-status"><option value="">اختر...</option></select></div>
+        <div class="fl"><label>المصمم</label><select id="o-des"><option value="">اختر...</option></select></div>
+        <div class="fl"><label>خدمة العملاء</label><select id="o-cs"><option value="">اختر...</option></select></div>
+        <div class="fl f3"><label>ملاحظات</label><input type="text" id="o-notes" placeholder="ملاحظات إضافية..."></div>
+      </div>
+
+      <div class="calc-box">
+        <div class="ci"><div class="ci-l">إجمالي السعر</div><div class="ci-v" id="c-total" style="color:var(--blue)">0</div></div>
+        <div class="ci"><div class="ci-l">الربح المتوقع</div><div class="ci-v" id="c-profit" style="color:var(--green)">0</div></div>
+        <div class="ci"><div class="ci-l">الإجمالي + الشحن</div><div class="ci-v" id="c-tship" style="color:var(--blue)">0</div></div>
+        <div class="ci"><div class="ci-l">المتبقي للتحصيل</div><div class="ci-v" id="c-rem" style="color:var(--red)">0</div></div>
+      </div>
+
+      <input type="hidden" id="o-eid">
+      <button class="btn-p" onclick="saveOrder()">💾 حفظ الأوردر</button>
+      <button class="btn-cancel" id="o-cancel" onclick="cancelEdit()">✕ إلغاء التعديل</button>
+    </div>
+  </div>
+
+  <div class="frow">
+    <button class="fb on" onclick="setOF('all',this)">الكل</button>
+    <button class="fb" onclick="setOF('تصميم',this)">🎨 تصميم</button>
+    <button class="fb" onclick="setOF('طباعة',this)">🖨️ طباعة</button>
+    <button class="fb" onclick="setOF('جاهز للشحن',this)">📦 جاهز</button>
+    <button class="fb" onclick="setOF('تحت الشحن',this)">🚚 شحن</button>
+    <button class="fb" onclick="setOF('تم التسليم',this)">✅ تسليم</button>
+    <button class="fb" onclick="setOF('تم التحصيل',this)">💰 تحصيل</button>
+    <input class="srch" type="text" id="o-srch" placeholder="🔍 بحث..." oninput="renderOrders()">
+  </div>
+
+  <div class="card">
+    <div class="tw"><table>
+      <thead><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>المنتج</th><th>الكمية</th><th>الإجمالي</th><th>المحصل</th><th>المتبقي</th><th>Money</th><th>الحالة</th><th>الشحن</th><th>المصمم</th><th>⚙</th></tr></thead>
+      <tbody id="ord-tb"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ══════ EXPENSES ══════ -->
+<div class="page" id="pg-expenses">
+  <div class="card">
+    <div class="ch" id="efh" onclick="togSec('efb','efh')">
+      <h3>➕ إضافة مصروف</h3><span class="arr">▼</span>
+    </div>
+    <div class="cb" id="efb">
+      <div class="fg">
+        <div class="fl"><label>نوع المصروف *</label><input type="text" id="e-type" placeholder="مثال: خامات، إيجار، شحن..."></div>
+        <div class="fl"><label>المبلغ (ج.م) *</label><input type="number" id="e-amt" placeholder="0" min="0"></div>
+        <div class="fl"><label>المحفظة</label><select id="e-wal"><option value="">اختر...</option></select></div>
+        <div class="fl"><label>التاريخ</label><input type="date" id="e-date"></div>
+        <div class="fl f3"><label>مرجع الأوردر / العميل (اختياري)</label><input type="text" id="e-ref" placeholder="اختياري"></div>
+      </div>
+      <button class="btn-p" onclick="saveExpense()">💾 تسجيل المصروف</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch nc"><h3>📊 إجمالي حسب النوع</h3></div>
+    <div class="cb on" id="e-summary"></div>
+  </div>
+  <div class="card">
+    <div class="ch nc"><h3>📋 سجل المصروفات</h3></div>
+    <div class="cb on"><div class="tw"><table>
+      <thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>المحفظة</th><th>المرجع</th><th>⚙</th></tr></thead>
+      <tbody id="exp-tb"></tbody>
+    </table></div></div>
+  </div>
+</div>
+
+<!-- ══════ SHIPPERS ══════ -->
+<div class="page" id="pg-shippers">
+  <h2 style="font-size:16px;font-weight:800;margin-bottom:12px">🚚 جهات الشحن والمندوبين</h2>
+  <div class="sg" id="sg"></div>
+</div>
+
+<!-- ══════ SETTINGS ══════ -->
+<div class="page" id="pg-settings">
+  <div class="set-grid">
+    <div class="card">
+      <div class="ch nc"><h3>📦 المنتجات</h3></div>
+      <div class="cb on">
+        <div id="s-prods"></div>
+        <div class="sadd">
+          <input type="text" id="sp-n" placeholder="اسم المنتج">
+          <input type="number" id="sp-c" placeholder="التكلفة" min="0">
+          <button onclick="addProd()">+ إضافة</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch nc"><h3>🗺️ المحافظات وتكلفة الشحن</h3></div>
+      <div class="cb on">
+        <div id="s-govs"></div>
+        <div class="sadd">
+          <input type="text" id="sg-n" placeholder="المحافظة">
+          <input type="number" id="sg-s" placeholder="تكلفة الشحن" min="0">
+          <button onclick="addGov()">+ إضافة</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch nc"><h3>🚚 جهات الشحن</h3></div>
+      <div class="cb on">
+        <div id="s-ships"></div>
+        <div class="sadd">
+          <input type="text" id="ss-n" placeholder="الاسم">
+          <select id="ss-t"><option value="COD">📦 COD</option><option value="مورد">📤 مورد</option></select>
+          <input type="text" id="ss-g" placeholder="المحافظة">
+          <input type="text" id="ss-c" placeholder="المدينة">
+          <button onclick="addShip()">+ إضافة</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch nc"><h3>💳 المحافظ</h3></div>
+      <div class="cb on">
+        <div id="s-wals"></div>
+        <div class="sadd">
+          <input type="text" id="sw-n" placeholder="اسم المحفظة">
+          <input type="number" id="sw-b" placeholder="رصيد أولي" min="0">
+          <button onclick="addWal()">+ إضافة</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch nc"><h3>🎨 المصممين</h3></div>
+      <div class="cb on">
+        <div id="s-des"></div>
+        <div class="sadd">
+          <input type="text" id="sd-n" placeholder="اسم المصمم">
+          <button onclick="addDes()">+ إضافة</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch nc"><h3>👥 خدمة العملاء</h3></div>
+      <div class="cb on">
+        <div id="s-cs"></div>
+        <div class="sadd">
+          <input type="text" id="sc-n" placeholder="الاسم">
+          <button onclick="addCS()">+ إضافة</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Shipper Orders -->
+<div class="ov" id="ship-modal" onclick="if(event.target===this)closeShipModal()">
+  <div class="modal">
+    <div class="mh"><h3 id="ship-modal-title">أوردرات الجهة</h3><button class="mc" onclick="closeShipModal()">✕</button></div>
+    <div style="padding:14px">
+      <div class="tw"><table>
+        <thead><tr><th>العميل</th><th>المنتج</th><th>الإجمالي+شحن</th><th>المحصل</th><th>المتبقي</th><th>الحالة</th></tr></thead>
+        <tbody id="ship-modal-tb"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════════════════════════════════════════
+     FIREBASE  — compat mode (no modules, no CORS issues)
+     ══════════════════════════════════════════════════════ -->
+
+<script>
+window.onload = function() {
+
+// ══ FIREBASE INIT ══
+firebase.initializeApp({
+  apiKey: "AIzaSyAOludqHuPohe5MgNVBAADPZ54_zoIbMFM",
+  authDomain: "oprtation-3824e.firebaseapp.com",
+  projectId: "oprtation-3824e",
+  storageBucket: "oprtation-3824e.firebasestorage.app",
+  messagingSenderId: "154730769411",
+  appId: "1:154730769411:web:bc9812ecfdb3541015f236"
+});
+const db = firebase.firestore(); // uses (default) database
+
+// ══════════════════════════════════════════
+//  APP STATE
+// ══════════════════════════════════════════
+const S = {
+  orders:[], expenses:[],
+  products:[], govs:[], shippers:[], wallets:[],
+  designers:[], csreps:[],
+  statuses:['تصميم','طباعة','جاهز للشحن','تحت الشحن','تم التسليم','تم التحصيل'],
+  settingDocs:{},
+  editId: null,
+  orderFilter: 'all',
+};
+
+const DEFAULTS = {
+  products:  [{name:'بزنس كارد',cost:50},{name:'بروشور',cost:80},{name:'بانر',cost:120},{name:'ستيكر',cost:30}],
+  govs:      [{name:'القاهرة',shipping:35},{name:'الجيزة',shipping:35},{name:'الإسكندرية',shipping:45},{name:'أسيوط',shipping:55}],
+  shippers:  [{id:'sh1',name:'بوسطة',type:'COD',gov:'القاهرة',city:'مدينة نصر'},{id:'sh2',name:'J&T',type:'COD',gov:'القاهرة',city:'مدينة نصر'}],
+  wallets:   [{id:'w1',name:'خزنة',balance:0},{id:'w2',name:'018',balance:0},{id:'w3',name:'1042',balance:0}],
+  designers: ['أحمد','محمود','سارة'],
+  csreps:    ['مريم','خالد'],
+};
+
+// ══════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════
+const N   = v => Number(v||0);
+const EGP = v => N(v).toLocaleString('ar-EG') + ' ج.م';
+const ESC = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const $   = id => document.getElementById(id);
+const VAL = id => { const el=$(id); return el ? el.value : ''; };
+
+function fmtDate(ts){
+  if(!ts) return '—';
+  try {
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString('ar-EG',{day:'numeric',month:'short',year:'numeric'});
+  } catch(e){ return '—'; }
+}
+
+function toast(msg, ok=true){
+  const t=$('toast');
+  t.textContent=msg; t.style.background=ok?'#059669':'#dc2626';
+  t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),3000);
+}
+
+function loader(show, errMsg=''){
+  $('loader').style.display = show ? 'flex' : 'none';
+  $('err-box').style.display = errMsg ? 'block' : 'none';
+  if(errMsg) $('err-box').textContent = errMsg;
+}
+
+function moneyBadge(ms){
+  if(ms==='earned') return '<span class="badge b-earn">✅ Earned</span>';
+  if(ms==='hold')   return '<span class="badge b-hold">🔒 Hold</span>';
+  return '<span class="badge b-pend">⏳ Pending</span>';
+}
+
+function statusBadge(s){
+  const C={'تصميم':'#f59e0b','طباعة':'#3b82f6','جاهز للشحن':'#8b5cf6',
+            'تحت الشحن':'#06b6d4','تم التسليم':'#10b981','تم التحصيل':'#059669'};
+  const c = C[s]||'#64748b';
+  return `<span class="badge" style="background:${c}22;color:${c};border:1px solid ${c}55">${ESC(s)}</span>`;
+}
+
+function setOpts(id, arr, labels){
+  const el=$(id); if(!el)return;
+  el.innerHTML = arr.map((v,i)=>`<option value="${ESC(v)}">${ESC(labels?labels[i]:v)}</option>`).join('');
+}
+
+// ══════════════════════════════════════════
+//  TABS
+// ══════════════════════════════════════════
+function goTab(id){
+  document.querySelectorAll('.tab').forEach((b,i)=>{
+    b.classList.toggle('on',['dashboard','orders','expenses','shippers','settings'][i]===id);
+  });
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  $('pg-'+id).classList.add('on');
+  if(id==='shippers') renderShippers();
+}
+
+function togSec(bid,hid){
+  const b=$(bid),h=$(hid);
+  b.classList.toggle('on'); h.classList.toggle('open');
+}
+
+// ══════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════
+async function boot(){
+  loader(true);
+  try {
+    await loadSettings();
+    await Promise.all([ loadOrders(), loadExpenses() ]);
+    syncDropdowns();
+    renderAll();
+    loader(false);
+    goTab('dashboard');
+  } catch(e){
+    console.error('BOOT ERROR:', e);
+    loader(true, '❌ فشل الاتصال بـ Firebase: ' + e.message + '\n\nتأكد من تفعيل Firestore في Console');
+  }
+}
+
+// ══════════════════════════════════════════
+//  SETTINGS
+// ══════════════════════════════════════════
+async function loadSettings(){
+  const snap = await db.collection('settings').get();
+  if(snap.empty){
+    // First run — seed defaults
+    const batch = db.batch();
+    for(const [k,v] of Object.entries(DEFAULTS)){
+      const ref = db.collection('settings').doc();
+      batch.set(ref, {key:k, value:JSON.stringify(v)});
+      S.settingDocs[k] = ref.id;
+    }
+    await batch.commit();
+    Object.assign(S, DEFAULTS);
+  } else {
+    snap.forEach(d=>{
+      const {key,value} = d.data();
+      S.settingDocs[key] = d.id;
+      if(key in DEFAULTS) S[key] = JSON.parse(value);
+    });
+    // Fill any missing keys
+    for(const [k,v] of Object.entries(DEFAULTS)){
+      if(!S.settingDocs[k]){
+        const ref = await db.collection('settings').add({key:k, value:JSON.stringify(v)});
+        S.settingDocs[k] = ref.id;
+        S[k] = v;
+      }
+    }
+  }
+}
+
+async function saveSetting(key){
+  const docId = S.settingDocs[key];
+  const value = JSON.stringify(S[key]);
+  if(docId){
+    await db.collection('settings').doc(docId).update({value});
+  } else {
+    const ref = await db.collection('settings').add({key, value});
+    S.settingDocs[key] = ref.id;
+  }
+}
+
+// ══════════════════════════════════════════
+//  ORDERS
+// ══════════════════════════════════════════
+async function loadOrders(){
+  const snap = await db.collection('orders').orderBy('createdAt','desc').get();
+  S.orders = [];
+  snap.forEach(d=> S.orders.push({id:d.id, ...d.data()}));
+}
+
+function calcNow(){
+  const qty   = N(VAL('o-qty'));
+  const price = N(VAL('o-price'));
+  const cost  = N(VAL('o-cost'));
+  const shipc = N(VAL('o-shipc'));
+  const paid  = N(VAL('o-paid'));
+  const paidby= VAL('o-shippay');
+  const total = price * qty;
+  const tc    = cost  * qty;
+  const tship = total + (paidby==='العميل' ? shipc : 0);
+  const rem   = tship - paid;
+  function sv(id, val, col){
+    const el=$(id); if(!el)return;
+    el.textContent = EGP(val);
+    el.style.color = col || (val<0?'var(--red)':val===0?'var(--muted)':'inherit');
+  }
+  sv('c-total',  total,  'var(--blue)');
+  sv('c-profit', total-tc, total-tc>=0?'var(--green)':'var(--red)');
+  sv('c-tship',  tship,  'var(--blue)');
+  sv('c-rem',    rem,    rem>0?'var(--red)':rem<0?'var(--orange)':'var(--green)');
+}
+
+function onGovChange(){
+  const gov = VAL('o-gov');
+  const g = S.govs.find(x=>x.name===gov);
+  if(g){ $('o-shipc').value = g.shipping||0; }
+  calcNow();
+}
+
+function onProdChange(){
+  const pname = VAL('o-prod');
+  const p = S.products.find(x=>x.name===pname);
+  if(p){ $('o-cost').value = p.cost||0; }
+  calcNow();
+}
+
+async function saveOrder(){
+  const cn   = VAL('o-cn').trim();
+  const gov  = VAL('o-gov');
+  const prod = VAL('o-prod');
+  if(!cn||!gov||!prod){ toast('⚠️ العميل والمحافظة والمنتج مطلوبة',false); return; }
+
+  const qty    = N(VAL('o-qty'))||1;
+  const price  = N(VAL('o-price'));
+  const cost   = N(VAL('o-cost'));
+  const shipc  = N(VAL('o-shipc'));
+  const paid   = N(VAL('o-paid'));
+  const paidby = VAL('o-shippay');
+  const wal    = VAL('o-wal');
+  const status = VAL('o-status');
+
+  const total_price        = price * qty;
+  const total_cost         = cost  * qty;
+  const profit             = total_price - total_cost;
+  const total_with_ship    = total_price + (paidby==='العميل' ? shipc : 0);
+  const remaining          = total_with_ship - paid;
+  const money_status       = ['تم التسليم','تم التحصيل'].includes(status) ? 'earned' : paid>0 ? 'hold' : 'pending';
+
+  const data = {
+    client_name: cn, client_phone: VAL('o-ph'),
+    governorate: gov, city: VAL('o-city'),
+    product: prod, quantity: qty,
+    price, cost, total_price, total_cost, profit,
+    shipping_company: VAL('o-ship'), shipping_cost: shipc, shipping_paid_by: paidby,
+    paid_amount: paid, wallet: wal,
+    total_with_ship, remaining, money_status, status,
+    designer: VAL('o-des'), csrep: VAL('o-cs'),
+    notes: VAL('o-notes'),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  try {
+    if(S.editId){
+      await db.collection('orders').doc(S.editId).update(data);
+      S.editId=null;
+      $('oform-title').textContent='➕ أوردر جديد';
+      $('o-cancel').style.display='none';
+      toast('✅ تم تحديث الأوردر');
+    } else {
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('orders').add(data);
+      // Credit wallet
+      if(paid>0 && wal) adjustWalletBalance(wal, paid);
+      // Auto-expense if company paid shipping
+      if(paidby==='الشركة' && shipc>0){
+        await db.collection('expenses').add({
+          type:'شحن أوردر', amount:shipc, wallet:wal,
+          order_ref: cn, date: new Date().toISOString().split('T')[0],
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        adjustWalletBalance(wal, -shipc);
+        await loadExpenses(); renderExpenses();
+      }
+      toast('✅ تم إضافة الأوردر');
+    }
+    await loadOrders();
+    renderOrders(); renderDashboard();
+    resetOForm();
+    const fb=$('ofb'); if(fb.classList.contains('on')){ fb.classList.remove('on'); $('ofh').classList.remove('open'); }
+  } catch(e){ toast('❌ '+e.message, false); }
+}
+
+function resetOForm(){
+  ['o-cn','o-ph','o-city','o-qty','o-price','o-cost','o-shipc','o-paid','o-notes']
+    .forEach(id=>{ const el=$(id); if(el) el.value=''; });
+  ['o-gov','o-prod','o-ship','o-wal','o-status','o-des','o-cs']
+    .forEach(id=>{ const el=$(id); if(el) el.selectedIndex=0; });
+  $('o-shippay').value='العميل';
+  $('o-eid').value='';
+  calcNow();
+}
+
+function editOrder(id){
+  const o = S.orders.find(x=>x.id===id); if(!o)return;
+  S.editId=id;
+  $('oform-title').textContent='✏️ تعديل الأوردر';
+  $('o-cancel').style.display='block';
+  const fb=$('ofb'),fh=$('ofh');
+  if(!fb.classList.contains('on')){ fb.classList.add('on'); fh.classList.add('open'); }
+  $('o-cn').value      = o.client_name||'';
+  $('o-ph').value      = o.client_phone||'';
+  $('o-gov').value     = o.governorate||'';
+  $('o-city').value    = o.city||'';
+  $('o-prod').value    = o.product||'';
+  $('o-qty').value     = o.quantity||1;
+  $('o-price').value   = o.price||0;
+  $('o-cost').value    = o.cost||0;
+  $('o-ship').value    = o.shipping_company||'';
+  $('o-shipc').value   = o.shipping_cost||0;
+  $('o-shippay').value = o.shipping_paid_by||'العميل';
+  $('o-paid').value    = o.paid_amount||0;
+  $('o-wal').value     = o.wallet||'';
+  $('o-status').value  = o.status||'';
+  $('o-des').value     = o.designer||'';
+  $('o-cs').value      = o.csrep||'';
+  $('o-notes').value   = o.notes||'';
+  $('o-eid').value     = id;
+  calcNow();
+  fb.scrollIntoView({behavior:'smooth'});
+}
+
+function cancelEdit(){
+  S.editId=null;
+  $('oform-title').textContent='➕ أوردر جديد';
+  $('o-cancel').style.display='none';
+  resetOForm();
+}
+
+async function deleteOrder(id){
+  if(!confirm('حذف هذا الأوردر؟')) return;
+  await db.collection('orders').doc(id).delete();
+  await loadOrders(); renderOrders(); renderDashboard();
+  toast('🗑️ تم الحذف');
+}
+
+let OFilter='all';
+function setOF(v,btn){
+  OFilter=v;
+  document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));
+  if(btn) btn.classList.add('on');
+  renderOrders();
+}
+
+function renderOrders(){
+  const q = ($('o-srch')?.value||'').toLowerCase();
+  let list = S.orders;
+  if(OFilter!=='all') list=list.filter(o=>o.status===OFilter);
+  if(q) list=list.filter(o=>
+    (o.client_name||'').toLowerCase().includes(q)||
+    (o.product||'').toLowerCase().includes(q)||
+    (o.client_phone||'').includes(q)
+  );
+  const tb=$('ord-tb');
+  if(!list.length){ tb.innerHTML=`<tr><td colspan="13" class="empty-td">📋 لا توجد أوردرات</td></tr>`; return; }
+  tb.innerHTML=list.map((o,i)=>`
+    <tr>
+      <td>${list.length-i}</td>
+      <td style="white-space:nowrap;font-size:11px">${fmtDate(o.createdAt)}</td>
+      <td><strong>${ESC(o.client_name)}</strong><br><small style="color:var(--muted)">${ESC(o.client_phone)}</small></td>
+      <td>${ESC(o.product)}</td>
+      <td style="text-align:center">${o.quantity}</td>
+      <td style="direction:ltr">${EGP(o.total_price)}</td>
+      <td style="direction:ltr;color:var(--green);font-weight:700">${EGP(o.paid_amount)}</td>
+      <td style="direction:ltr;color:${N(o.remaining)>0?'var(--red)':'var(--muted)'};font-weight:700">${EGP(o.remaining)}</td>
+      <td>${moneyBadge(o.money_status)}</td>
+      <td>${statusBadge(o.status)}</td>
+      <td style="font-size:11px">${ESC(o.shipping_company)||'—'}<br><small style="color:var(--muted)">${ESC(o.governorate)}</small></td>
+      <td style="font-size:11px;color:var(--muted)">${ESC(o.designer)||'—'}</td>
+      <td>
+        <div style="display:flex;gap:3px;flex-wrap:wrap">
+          <button class="btn-sm be" onclick="editOrder('${o.id}')">تعديل</button>
+          <button class="btn-sm bd" onclick="deleteOrder('${o.id}')">حذف</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+// ══════════════════════════════════════════
+//  EXPENSES
+// ══════════════════════════════════════════
+async function loadExpenses(){
+  const snap = await db.collection('expenses').orderBy('createdAt','desc').get();
+  S.expenses=[];
+  snap.forEach(d=> S.expenses.push({id:d.id,...d.data()}));
+}
+
+async function saveExpense(){
+  const type = VAL('e-type').trim();
+  const amt  = N(VAL('e-amt'));
+  if(!type||!amt){ toast('⚠️ النوع والمبلغ مطلوبان',false); return; }
+  const wal  = VAL('e-wal');
+  const date = VAL('e-date');
+  const ref  = VAL('e-ref').trim();
+  await db.collection('expenses').add({
+    type, amount:amt, wallet:wal, date, order_ref:ref,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  adjustWalletBalance(wal, -amt);
+  await loadExpenses(); renderExpenses(); renderDashboard();
+  ['e-type','e-amt','e-ref'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
+  toast('✅ تم تسجيل المصروف');
+}
+
+async function deleteExpense(id){
+  if(!confirm('حذف هذا المصروف؟')) return;
+  await db.collection('expenses').doc(id).delete();
+  await loadExpenses(); renderExpenses(); renderDashboard();
+  toast('🗑️ تم الحذف');
+}
+
+function renderExpenses(){
+  // Summary
+  const byType={};
+  S.expenses.forEach(e=>{ byType[e.type]=(byType[e.type]||0)+N(e.amount); });
+  const sumEl=$('e-summary');
+  sumEl.innerHTML = Object.entries(byType).sort((a,b)=>b[1]-a[1]).map(([t,v])=>`
+    <div class="mkpi"><span class="mk-n">${ESC(t)}</span><span class="mk-v" style="color:var(--red)">${EGP(v)}</span></div>`
+  ).join('') || '<p style="color:var(--muted2);font-size:12px">لا توجد مصروفات بعد</p>';
+
+  // Table
+  const tb=$('exp-tb');
+  if(!S.expenses.length){ tb.innerHTML=`<tr><td colspan="6" class="empty-td">لا توجد مصروفات</td></tr>`; return; }
+  tb.innerHTML=S.expenses.map(e=>`
+    <tr>
+      <td>${e.date||'—'}</td>
+      <td><strong>${ESC(e.type)}</strong></td>
+      <td style="direction:ltr;color:var(--red);font-weight:700">${EGP(e.amount)}</td>
+      <td>${ESC(e.wallet)||'—'}</td>
+      <td>${ESC(e.order_ref)||'—'}</td>
+      <td><button class="btn-sm bd" onclick="deleteExpense('${e.id}')">حذف</button></td>
+    </tr>`).join('');
+}
+
+// ══════════════════════════════════════════
+//  WALLETS
+// ══════════════════════════════════════════
+function adjustWalletBalance(walName, amount){
+  if(!walName) return;
+  const w = S.wallets.find(x=>x.name===walName);
+  if(w){ w.balance=(w.balance||0)+amount; saveSetting('wallets'); }
+}
+
+async function topupWallet(idx){
+  const amt = parseFloat(prompt('مبلغ الإيداع (ج.م):'));
+  if(!amt||isNaN(amt)||amt<=0)return;
+  S.wallets[idx].balance=(S.wallets[idx].balance||0)+amt;
+  await saveSetting('wallets');
+  renderSettings(); renderDashboard();
+  toast('✅ تم الإيداع');
+}
+
+// ══════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════
+function renderDashboard(){
+  const O=S.orders, E=S.expenses;
+  const totSales  = O.reduce((s,o)=>s+N(o.total_price),0);
+  const totCost   = O.reduce((s,o)=>s+N(o.total_cost),0);
+  const totProfit = O.reduce((s,o)=>s+N(o.profit),0);
+  const totColl   = O.reduce((s,o)=>s+N(o.paid_amount),0);
+  const holdAmt   = O.filter(o=>o.money_status==='hold').reduce((s,o)=>s+N(o.paid_amount),0);
+  const earnedAmt = O.filter(o=>o.money_status==='earned').reduce((s,o)=>s+N(o.total_with_ship),0);
+  const totExp    = E.reduce((s,e)=>s+N(e.amount),0);
+  const walTotal  = S.wallets.reduce((s,w)=>s+N(w.balance),0);
+  const withShip  = O.filter(o=>['تحت الشحن','تم التسليم'].includes(o.status)&&N(o.remaining)>0)
+                     .reduce((s,o)=>s+N(o.remaining),0);
+  const net = walTotal + withShip - totExp;
+
+  $('d-net').textContent    = EGP(net);
+  $('d-wallets').textContent= EGP(walTotal);
+  $('d-shippers').textContent=EGP(withShip);
+  $('d-exp').textContent    = EGP(totExp);
+  $('d-coll').textContent   = EGP(totColl);
+  $('d-sales').textContent  = EGP(totSales);
+  $('d-cost').textContent   = EGP(totCost);
+  $('d-profit').textContent = EGP(totProfit);
+  $('d-hold').textContent   = EGP(holdAmt);
+  $('d-earned').textContent = EGP(earnedAmt);
+
+  // Wallet breakdown
+  $('d-wallets-detail').innerHTML = S.wallets.map(w=>`
+    <div class="mkpi">
+      <div>
+        <div class="mk-n">${ESC(w.name)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="mk-v" style="color:var(--blue)">${EGP(w.balance||0)}</span>
+        <button class="btn-sm bg" onclick="topupWallet(${S.wallets.indexOf(w)})">+ إيداع</button>
+      </div>
+    </div>`).join('') || '<p style="color:var(--muted2);font-size:12px;padding:4px">لا توجد محافظ</p>';
+
+  // Pending
+  const pend = S.orders.filter(o=>N(o.remaining)>0);
+  $('d-pend-tb').innerHTML = pend.length
+    ? pend.map(o=>`<tr>
+        <td><strong>${ESC(o.client_name)}</strong></td>
+        <td>${ESC(o.product)}</td>
+        <td style="direction:ltr;color:var(--red);font-weight:700">${EGP(o.remaining)}</td>
+        <td>${statusBadge(o.status)}</td>
+        <td style="font-size:11px">${ESC(o.shipping_company)||'—'}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="empty-td">✅ لا يوجد متبقي</td></tr>';
+}
+
+// ══════════════════════════════════════════
+//  SHIPPERS
+// ══════════════════════════════════════════
+function renderShippers(){
+  const el=$('sg');
+  if(!S.shippers.length){ el.innerHTML='<p style="color:var(--muted2);padding:16px">لا توجد جهات شحن — أضف من الإعدادات</p>'; return; }
+  el.innerHTML = S.shippers.map(s=>{
+    const so = S.orders.filter(o=>o.shipping_company===s.name);
+    const opT= so.reduce((x,o)=>x+N(o.total_with_ship),0);
+    const paidT= so.filter(o=>o.money_status==='earned').reduce((x,o)=>x+N(o.total_with_ship),0);
+    const diff = s.type==='COD' ? (opT-paidT) : (paidT-opT);
+    const dLbl = s.type==='COD' ? (diff>0?'⚠️ في ذمته لك':'✅ تسوية') : (diff>0?'💸 عليك له':'✅ تسوية');
+    const dCol = diff>0?'var(--red)':diff<0?'var(--orange)':'var(--green)';
+    return`
+    <div class="sc">
+      <div class="sc-top">
+        <div><div class="sc-name">${ESC(s.name)}</div><div class="sc-loc">${ESC(s.gov||'')} ${s.city?'— '+ESC(s.city):''}</div></div>
+        <span class="pill ${s.type==='COD'?'pill-cod':'pill-sup'}">${s.type==='COD'?'📦 COD':'📤 مورد'}</span>
+      </div>
+      <div class="sc-row"><span>إجمالي العمليات</span><b>${EGP(opT)}</b></div>
+      <div class="sc-row"><span>تم التحصيل (Earned)</span><b style="color:var(--green)">${EGP(paidT)}</b></div>
+      <div class="sc-diff">
+        <span style="color:${dCol}">${dLbl}</span>
+        <span style="color:${dCol}">${Math.abs(diff)>0?EGP(Math.abs(diff)):'—'}</span>
+      </div>
+      <div style="margin-top:8px">
+        <button class="btn-sm be" onclick="showShipOrders('${ESC(s.name)}')">عرض الأوردرات</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showShipOrders(name){
+  const so = S.orders.filter(o=>o.shipping_company===name);
+  $('ship-modal-title').textContent = `أوردرات ${name}`;
+  $('ship-modal-tb').innerHTML = so.length
+    ? so.map(o=>`<tr>
+        <td>${ESC(o.client_name)}</td><td>${ESC(o.product)}</td>
+        <td style="direction:ltr">${EGP(o.total_with_ship)}</td>
+        <td style="direction:ltr;color:var(--green)">${EGP(o.paid_amount)}</td>
+        <td style="direction:ltr;color:var(--red)">${EGP(o.remaining)}</td>
+        <td>${statusBadge(o.status)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" class="empty-td">لا توجد أوردرات</td></tr>';
+  $('ship-modal').classList.add('on');
+}
+function closeShipModal(){ $('ship-modal').classList.remove('on'); }
+
+// ══════════════════════════════════════════
+//  SETTINGS
+// ══════════════════════════════════════════
+function renderSettings(){
+  // Products
+  $('s-prods').innerHTML = S.products.map((p,i)=>`
+    <div class="sitem"><span>${ESC(p.name)} — تكلفة: <b>${EGP(p.cost)}</b></span>
+    <button class="btn-sm bd" onclick="delProd(${i})">حذف</button></div>`).join('');
+  // Govs
+  $('s-govs').innerHTML = S.govs.map((g,i)=>`
+    <div class="sitem"><span>${ESC(g.name)} — شحن: <b>${EGP(g.shipping)}</b></span>
+    <button class="btn-sm bd" onclick="delGov(${i})">حذف</button></div>`).join('');
+  // Shippers
+  $('s-ships').innerHTML = S.shippers.map((s,i)=>`
+    <div class="sitem"><span>${ESC(s.name)} (${s.type}) — ${ESC(s.gov||'')}</span>
+    <button class="btn-sm bd" onclick="delShip(${i})">حذف</button></div>`).join('');
+  // Wallets
+  $('s-wals').innerHTML = S.wallets.map((w,i)=>`
+    <div class="sitem"><span>${ESC(w.name)} — رصيد: <b>${EGP(w.balance||0)}</b></span>
+    <div style="display:flex;gap:4px">
+      <button class="btn-sm bg" onclick="topupWallet(${i})">+ إيداع</button>
+      <button class="btn-sm bd" onclick="delWal(${i})">حذف</button>
+    </div></div>`).join('');
+  // Designers
+  $('s-des').innerHTML = S.designers.map((d,i)=>`
+    <div class="sitem"><span>${ESC(d)}</span>
+    <button class="btn-sm bd" onclick="delDes(${i})">حذف</button></div>`).join('');
+  // CS
+  $('s-cs').innerHTML = S.csreps.map((c,i)=>`
+    <div class="sitem"><span>${ESC(c)}</span>
+    <button class="btn-sm bd" onclick="delCS(${i})">حذف</button></div>`).join('');
+  syncDropdowns();
+}
+
+function syncDropdowns(){
+  setOpts('o-gov',    S.govs.map(g=>g.name));
+  setOpts('o-prod',   S.products.map(p=>p.name));
+  setOpts('o-ship',   S.shippers.map(s=>s.name));
+  setOpts('o-wal',    S.wallets.map(w=>w.name));
+  setOpts('o-status', S.statuses);
+  setOpts('o-des',    S.designers);
+  setOpts('o-cs',     S.csreps);
+  setOpts('e-wal',    S.wallets.map(w=>w.name));
+}
+
+// Settings add/delete
+async function addProd(){
+  const n=$('sp-n').value.trim(), c=N($('sp-c').value);
+  if(!n)return; S.products.push({name:n,cost:c});
+  await saveSetting('products'); $('sp-n').value=''; $('sp-c').value=''; renderSettings();
+}
+async function delProd(i){ S.products.splice(i,1); await saveSetting('products'); renderSettings(); }
+
+async function addGov(){
+  const n=$('sg-n').value.trim(), s=N($('sg-s').value);
+  if(!n)return; S.govs.push({name:n,shipping:s});
+  await saveSetting('govs'); $('sg-n').value=''; $('sg-s').value=''; renderSettings();
+}
+async function delGov(i){ S.govs.splice(i,1); await saveSetting('govs'); renderSettings(); }
+
+async function addShip(){
+  const n=$('ss-n').value.trim();
+  if(!n)return;
+  S.shippers.push({id:'s'+Date.now(),name:n,type:$('ss-t').value,gov:$('ss-g').value.trim(),city:$('ss-c').value.trim()});
+  await saveSetting('shippers');
+  ['ss-n','ss-g','ss-c'].forEach(id=>$(id).value='');
+  renderSettings(); renderShippers();
+}
+async function delShip(i){ S.shippers.splice(i,1); await saveSetting('shippers'); renderSettings(); renderShippers(); }
+
+async function addWal(){
+  const n=$('sw-n').value.trim(), b=N($('sw-b').value);
+  if(!n)return; S.wallets.push({id:'w'+Date.now(),name:n,balance:b});
+  await saveSetting('wallets'); $('sw-n').value=''; $('sw-b').value=''; renderSettings(); renderDashboard();
+}
+async function delWal(i){ S.wallets.splice(i,1); await saveSetting('wallets'); renderSettings(); renderDashboard(); }
+
+async function addDes(){
+  const v=$('sd-n').value.trim(); if(!v)return;
+  S.designers.push(v); await saveSetting('designers'); $('sd-n').value=''; renderSettings();
+}
+async function delDes(i){ S.designers.splice(i,1); await saveSetting('designers'); renderSettings(); }
+
+async function addCS(){
+  const v=$('sc-n').value.trim(); if(!v)return;
+  S.csreps.push(v); await saveSetting('csreps'); $('sc-n').value=''; renderSettings();
+}
+async function delCS(i){ S.csreps.splice(i,1); await saveSetting('csreps'); renderSettings(); }
+
+// ══════════════════════════════════════════
+//  RENDER ALL + DATE INIT
+// ══════════════════════════════════════════
+function renderAll(){
+  renderDashboard(); renderOrders(); renderExpenses(); renderSettings();
+}
+
+$('e-date').value = new Date().toISOString().split('T')[0];
+
+// ══════════════════════════════════════════
+//  START — wait for full page + SDKs
+// ══════════════════════════════════════════
+
+// ══ START ══
+boot();
+
+}; // end window.onload
+</script>
+</body>
+</html>
