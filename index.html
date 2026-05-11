@@ -165,6 +165,7 @@ tbody td{padding:7px 8px;font-size:12px;vertical-align:middle}
   <button class="tab" onclick="goTab('orders')">📦 الأوردرات</button>
   <button class="tab" onclick="goTab('expenses')">💸 المصروفات</button>
   <button class="tab" onclick="goTab('shippers')">🚚 الشحن</button>
+  <button class="tab" onclick="goTab('intelligence')">🧠 Print Intelligence</button>
   <button class="tab" onclick="goTab('settings')">⚙️ الإعدادات</button>
   <div class="brand">🖨️ PrintOps</div>
 </nav>
@@ -315,6 +316,29 @@ tbody td{padding:7px 8px;font-size:12px;vertical-align:middle}
   <div class="sg" id="sg"></div>
 </div>
 
+<!-- ══════ PRINT INTELLIGENCE ENGINE ══════ -->
+<div class="page" id="pg-intelligence">
+  <div class="card">
+    <div class="ch nc"><h3>🧠 Print Intelligence Engine — مصر / كروت شخصية</h3></div>
+    <div class="cb on">
+      <div class="krow">
+        <div class="kpi"><span class="kpi-v" id="pi-routes">0</span><div class="kpi-l">Production Routes</div></div>
+        <div class="kpi"><span class="kpi-v" id="pi-materials">0</span><div class="kpi-l">Materials</div></div>
+        <div class="kpi"><span class="kpi-v" id="pi-suppliers">0</span><div class="kpi-l">Suppliers</div></div>
+        <div class="kpi"><span class="kpi-v" id="pi-lowmargin">0</span><div class="kpi-l">Low Margin Jobs</div></div>
+      </div>
+      <p style="font-size:12px;color:var(--muted)">الموديول يحوّل خبرة الإنتاج والتسعير والموردين إلى قواعد تشغيل ديناميكية بدون Hardcode للمنتج الواحد.</p>
+    </div>
+  </div>
+  <div class="set-grid">
+    <div class="card"><div class="ch nc"><h3>1) Print Knowledge Engine</h3></div><div class="cb on" id="pi-routes-list"></div></div>
+    <div class="card"><div class="ch nc"><h3>2) Material Intelligence Engine</h3></div><div class="cb on" id="pi-materials-list"></div></div>
+    <div class="card"><div class="ch nc"><h3>3) Supplier Intelligence Engine</h3></div><div class="cb on" id="pi-suppliers-list"></div></div>
+    <div class="card"><div class="ch nc"><h3>4) Smart Pricing + 5/6 Execution & Finance</h3></div><div class="cb on" id="pi-pricing-list"></div></div>
+    <div class="card"><div class="ch nc"><h3>7) Business Intelligence</h3></div><div class="cb on" id="pi-bi-list"></div></div>
+  </div>
+</div>
+
 <!-- ══════ SETTINGS ══════ -->
 <div class="page" id="pg-settings">
   <div class="set-grid">
@@ -427,6 +451,7 @@ const S = {
   orders:[], expenses:[],
   products:[], govs:[], shippers:[], wallets:[],
   designers:[], csreps:[],
+  productionRoutes:[], materials:[], stageSuppliers:[], pricingRules:[],
   statuses:['تصميم','طباعة','جاهز للشحن','تحت الشحن','تم التسليم','تم التحصيل'],
   settingDocs:{},
   editId: null,
@@ -440,6 +465,19 @@ const DEFAULTS = {
   wallets:   [{id:'w1',name:'خزنة',balance:0},{id:'w2',name:'018',balance:0},{id:'w3',name:'1042',balance:0}],
   designers: ['أحمد','محمود','سارة'],
   csreps:    ['مريم','خالد'],
+  productionRoutes: [
+    {product:'كروت شخصية',stages:['Design','Prepress','Paper Selection','Printing','Lamination','Cutting','Quality Check','Packing'],enabled:true},
+    {product:'Folder',stages:['Design','Plate Making','Paper Selection','Printing','Lamination','Die Cutting','Folding','Assembly','Quality Check'],enabled:true}
+  ],
+  materials:[
+    {name:'Couche 350gsm', type:'ورق', gsm:350, suppliers:['نور','الأهرام'], cost:7.2, use:['كروت شخصية'], machines:['Heidelberg SM74'], quality:5},
+    {name:'Ivory 300gsm', type:'ورق', gsm:300, suppliers:['أبو الهول'], cost:6.1, use:['كروت شخصية'], machines:['Ryobi 524'], quality:4}
+  ],
+  stageSuppliers:[
+    {name:'نور', spec:'طباعة أوفست', ops:['Printing','Lamination'], materials:['Couche 350gsm'], sizes:['A3','A4'], payment:'14 يوم', speed:4, quality:5, errorRate:2, reliability:5},
+    {name:'الأهرام', spec:'تشطيب سريع', ops:['Cutting','Packing'], materials:['Couche 350gsm','Ivory 300gsm'], sizes:['A3'], payment:'كاش', speed:5, quality:4, errorRate:3, reliability:4}
+  ],
+  pricingRules:[{customer:'default', targetMargin:0.35, lowMarginAlert:0.18, wastePct:0.07, laborPct:0.12}]
 };
 
 // ══════════════════════════════════════════
@@ -494,11 +532,12 @@ function setOpts(id, arr, labels){
 // ══════════════════════════════════════════
 function goTab(id){
   document.querySelectorAll('.tab').forEach((b,i)=>{
-    b.classList.toggle('on',['dashboard','orders','expenses','shippers','settings'][i]===id);
+    b.classList.toggle('on',['dashboard','orders','expenses','shippers','intelligence','settings'][i]===id);
   });
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   $('pg-'+id).classList.add('on');
   if(id==='shippers') renderShippers();
+  if(id==='intelligence') renderIntelligence();
 }
 
 function togSec(bid,hid){
@@ -1041,7 +1080,53 @@ async function delCS(i){ S.csreps.splice(i,1); await saveSetting('csreps'); rend
 //  RENDER ALL + DATE INIT
 // ══════════════════════════════════════════
 function renderAll(){
-  renderDashboard(); renderOrders(); renderExpenses(); renderSettings();
+  renderDashboard(); renderOrders(); renderExpenses(); renderSettings(); renderIntelligence();
+}
+
+function recommendMaterial(product,budgetLevel='mid'){
+  const candidates = S.materials.filter(m=>m.use.includes(product));
+  return candidates.sort((a,b)=> (b.quality-a.quality) + ((budgetLevel==='low'?a.cost-b.cost:0)) )[0];
+}
+function recommendSupplier(stage, materialName){
+  const candidates = S.stageSuppliers.filter(s=>s.ops.includes(stage) && (!materialName || s.materials.includes(materialName)));
+  return candidates.sort((a,b)=> (b.reliability-a.reliability) + (b.quality-a.quality) + (b.speed-a.speed) - ((a.errorRate-b.errorRate)*2))[0];
+}
+function calcSmartPrice(product, qty){
+  const mat = recommendMaterial(product) || {cost:0};
+  const r = S.pricingRules[0] || {wastePct:0, laborPct:0, targetMargin:.3, lowMarginAlert:.15};
+  const setup = 120, finish = 80, outsource = 0, delivery = 45;
+  const material = qty * N(mat.cost);
+  const production = qty * 1.9;
+  const waste = (material + production) * r.wastePct;
+  const labor = (material + production) * r.laborPct;
+  const costPrice = setup + material + production + finish + waste + labor + outsource + delivery;
+  const sell = costPrice * (1 + r.targetMargin);
+  const margin = (sell-costPrice)/sell;
+  return {costPrice,sell,margin,alert:margin<r.lowMarginAlert, material:mat.name||'—'};
+}
+function renderIntelligence(){
+  $('pi-routes').textContent = S.productionRoutes.length;
+  $('pi-materials').textContent = S.materials.length;
+  $('pi-suppliers').textContent = S.stageSuppliers.length;
+  const lowMargin = S.orders.filter(o=> N(o.total_price)>0 && (N(o.profit)/N(o.total_price)) < N((S.pricingRules[0]||{}).lowMarginAlert||0.18)).length;
+  $('pi-lowmargin').textContent = lowMargin;
+
+  $('pi-routes-list').innerHTML = S.productionRoutes.map(r=>`<div class="sitem"><span><b>${ESC(r.product)}</b><br><small>${r.stages.join(' → ')}</small></span></div>`).join('');
+  $('pi-materials-list').innerHTML = S.materials.map(m=>`<div class="sitem"><span><b>${ESC(m.name)}</b> (${m.gsm}gsm) — ${EGP(m.cost)} | جودة ${m.quality}/5</span></div>`).join('');
+  $('pi-suppliers-list').innerHTML = S.stageSuppliers.map(s=>`<div class="sitem"><span><b>${ESC(s.name)}</b> — ${ESC(s.spec)} | Reliability ${s.reliability}/5 | Error ${s.errorRate}%</span></div>`).join('');
+
+  const quote = calcSmartPrice('كروت شخصية', 1000);
+  const bestPrintSupplier = recommendSupplier('Printing', quote.material);
+  $('pi-pricing-list').innerHTML = `
+    <div class="mkpi"><span class="mk-n">Recommended Material</span><span class="mk-v">${ESC(quote.material)}</span></div>
+    <div class="mkpi"><span class="mk-n">Recommended Printing Supplier</span><span class="mk-v">${ESC(bestPrintSupplier?.name||'—')}</span></div>
+    <div class="mkpi"><span class="mk-n">Cost Price (1000 card)</span><span class="mk-v">${EGP(quote.costPrice)}</span></div>
+    <div class="mkpi"><span class="mk-n">Selling Price</span><span class="mk-v">${EGP(quote.sell)}</span></div>
+    <div class="mkpi"><span class="mk-n">Profit Margin</span><span class="mk-v">${(quote.margin*100).toFixed(1)}%</span></div>
+    <div class="mkpi"><span class="mk-n">Risk Alert</span><span class="mk-v" style="color:${quote.alert?'var(--red)':'var(--green)'}">${quote.alert?'LOW MARGIN':'OK'}</span></div>`;
+
+  const profitable = [...S.orders].sort((a,b)=>N(b.profit)-N(a.profit)).slice(0,3);
+  $('pi-bi-list').innerHTML = profitable.length ? profitable.map(o=>`<div class="sitem"><span><b>${ESC(o.product)}</b> — ${ESC(o.client_name)}<br><small>Profit: ${EGP(o.profit)} | Status: ${ESC(o.status||'—')}</small></span></div>`).join('') : '<p style="color:var(--muted2)">لا توجد بيانات كافية بعد.</p>';
 }
 
 $('e-date').value = new Date().toISOString().split('T')[0];
